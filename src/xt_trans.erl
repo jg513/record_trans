@@ -86,7 +86,6 @@ transform(record_copy, [atom, variable, atom, variable], _, _, Args, Records) ->
             Access = erl_syntax:record_access(SVar0, SRec0, Field),
             erl_syntax:record_field(Field, Access)
         end || Field0 <- DFields, lists:member(Field0, SFields)],
-    io:format("~p~n", [Fields]),
     erl_syntax:record_expr(DVar0, DRec0, Fields);
 transform(_, _, Form0, _Operator, _Arguments, _Records) ->
     Form0.
