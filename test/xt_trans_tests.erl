@@ -20,6 +20,10 @@
     f5 = 14
 }).
 
+formater(Field) ->
+    integer_to_list(Field).
+
+%% copy fields
 copy_3() ->
     Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
     record_copy(rec1, rec2, Rec2).
@@ -29,6 +33,17 @@ copy_4() ->
     Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
     record_copy(rec1, Rec1, rec2, Rec2).
 
+%% copy fields with formaters
+f_copy_3() ->
+    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
+    record_copy(rec1, rec2, Rec2, [{f1, formater}, {any, module, function}]).
+
+f_copy_4() ->
+    Rec1 = #rec1{f1 = 4},
+    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
+    record_copy(rec1, Rec1, rec2, Rec2, [{f1, formater}]).
+
+%% assign fields
 assign_2() ->
     List = [101, 102, 103],
     record_assign(rec1, List).
@@ -68,7 +83,6 @@ assign_fields_list_4() ->
     Rec1 = #rec1{f1 = 4},
     record_assign(rec1, Rec1, [f1, undefined, any, f3], [101, 102, 103, 104]).
 
-
 -include_lib("eunit/include/eunit.hrl").
 
 -ifdef(TEST).
@@ -77,6 +91,12 @@ record_copy_test_() ->
     [
         ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, copy_3()),
         ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, copy_4())
+    ].
+
+f_record_copy_test_() ->
+    [
+        ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 102}, f_copy_3()),
+        ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 102}, f_copy_4())
     ].
 
 record_assign_test_() ->
