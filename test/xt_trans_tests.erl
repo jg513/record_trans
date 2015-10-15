@@ -29,6 +29,10 @@ copy_4() ->
     Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
     record_copy(rec1, Rec1, rec2, Rec2).
 
+assign_2() ->
+    List = [101, 102, 103],
+    record_assign(rec1, List).
+
 assign_3() ->
     List = [101, 102, 103, 104],
     record_assign(rec1, rec2, List).
@@ -37,6 +41,9 @@ assign_4() ->
     Rec1 = #rec1{f1 = 4},
     List = [101, 102, 103, 104],
     record_assign(rec1, Rec1, rec2, List).
+
+assign_list_2() ->
+    record_assign(rec1, [101, 102, 103]).
 
 assign_list_3() ->
     record_assign(rec1, rec2, [101, 102, 103, 104]).
@@ -49,15 +56,24 @@ assign_list_4() ->
 
 -ifdef(TEST).
 
-all_test_() ->
-    Result = #rec1{f1 = 101, f2 = 2, f3 = 102},
+record_copy_test_() ->
     [
-        ?_assertEqual(copy_3(), Result),
-        ?_assertEqual(copy_4(), Result),
-        ?_assertEqual(assign_3(), Result),
-        ?_assertEqual(assign_4(), Result),
-        ?_assertEqual(assign_list_3(), Result),
-        ?_assertEqual(assign_list_4(), Result)
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, copy_3()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, copy_4())
+    ].
+
+record_assign_test_() ->
+    [
+        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_2()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_3()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_4())
+    ].
+
+record_assign_list_test_() ->
+    [
+        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_list_2()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_list_3()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_list_4())
     ].
 
 -endif.

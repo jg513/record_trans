@@ -86,6 +86,9 @@ transform(record_copy, [atom, atom, variable], _, _, Args, Records) ->
     [DRec0, SRec0, SVar0] = Args,
     Fields = record_copy_fields(DRec0, SRec0, SVar0, Records),
     erl_syntax:record_expr(DRec0, Fields);
+transform(record_assign, [atom, list], Opr, Forms0, Args, Records) ->
+    [DRec, SVar] = Args,
+    transform(record_assign, [atom, atom, list], Opr, Forms0, [DRec, DRec, SVar], Records);
 transform(record_assign, [atom, atom, list], _, Forms0, Args, Records) ->
     [DRec0, SRec0, SVar0] = Args,
     Length = erlang:length(field_names(Records, SRec0)),
@@ -106,6 +109,9 @@ transform(record_assign, [atom, variable, atom, list], _, Forms0, Args, Records)
         _ ->
             Forms0
     end;
+transform(record_assign, [atom, variable], Opr, Forms0, Args, Records) ->
+    [DRec, SVar] = Args,
+    transform(record_assign, [atom, atom, variable], Opr, Forms0, [DRec, DRec, SVar], Records);
 transform(record_assign, [atom, atom, variable], _, _, Args, Records) ->
     [DRec0, SRec0, SVar0] = Args,
     {Match, Fields} = record_assign_variable_fields(DRec0, SRec0, SVar0, Records),
@@ -116,7 +122,7 @@ transform(record_assign, [atom, variable, atom, variable], _, _, Args, Records) 
     {Match, Fields} = record_assign_variable_fields(DRec0, SRec0, SVar0, Records),
     Record = erl_syntax:record_expr(DVar0, DRec0, Fields),
     erl_syntax:block_expr([Match, Record]);
-transform(_, _, Form0, _Operator, _Arguments, _Records) ->
+transform(_, _, Form0, _Opr, _Args, _Records) ->
     Form0.
 
 %% Transform Internal API

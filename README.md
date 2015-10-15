@@ -2,7 +2,7 @@
 
 parse_transform module provides record_copy
 
-See the samples in ```xt_trans_sample.erl```.
+See the samples in ```xt_trans_tests.erl```.
 
 ### record_copy/3
 
