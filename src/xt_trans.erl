@@ -94,7 +94,8 @@ transform(record_assign, [atom, atom, list], _, Forms0, Args, Records) ->
     Length = erlang:length(field_names(Records, SRec0)),
     case erl_syntax:list_length(SVar0) of
         Length ->
-            Fields = record_assign_list_fields(DRec0, SRec0, SVar0, Records),
+            SFields = atom_fields(Records, SRec0),
+            Fields = record_assign_list_fields(DRec0, SFields, SVar0, Records),
             erl_syntax:record_expr(DRec0, Fields);
         _ ->
             Forms0
@@ -104,8 +105,49 @@ transform(record_assign, [atom, variable, atom, list], _, Forms0, Args, Records)
     Length = erlang:length(field_names(Records, SRec0)),
     case erl_syntax:list_length(SVar0) of
         Length ->
-            Fields = record_assign_list_fields(DRec0, SRec0, SVar0, Records),
+            SFields = atom_fields(Records, SRec0),
+            Fields = record_assign_list_fields(DRec0, SFields, SVar0, Records),
             erl_syntax:record_expr(DVar0, DRec0, Fields);
+        _ ->
+            Forms0
+    end;
+transform(record_assign, [atom, list, list], _, Forms0, Args, Records) ->
+    [DRec0, ListNode, SVar0] = Args,
+    Length = erl_syntax:list_length(SVar0),
+    case check_fields_list(ListNode) of
+        {true, Length, SFields} ->
+            Fields = record_assign_list_fields(DRec0, SFields, SVar0, Records),
+            erl_syntax:record_expr(DRec0, Fields);
+        _ ->
+            Forms0
+    end;
+transform(record_assign, [atom, variable, list, list], _, Forms0, Args, Records) ->
+    [DRec0, DVar0, ListNode, SVar0] = Args,
+    Length = erl_syntax:list_length(SVar0),
+    case check_fields_list(ListNode) of
+        {true, Length, SFields} ->
+            Fields = record_assign_list_fields(DRec0, SFields, SVar0, Records),
+            erl_syntax:record_expr(DVar0, DRec0, Fields);
+        _ ->
+            Forms0
+    end;
+transform(record_assign, [atom, list, variable], _, Forms0, Args, Records) ->
+    [DRec0, ListNode, SVar0] = Args,
+    case check_fields_list(ListNode) of
+        {true, _Length, SFields} ->
+            {Match, Fields} = record_assign_variable_fields(DRec0, SFields, SVar0, Records),
+            Record = erl_syntax:record_expr(DRec0, Fields),
+            erl_syntax:block_expr([Match, Record]);
+        _ ->
+            Forms0
+    end;
+transform(record_assign, [atom, variable, list, variable], _, Forms0, Args, Records) ->
+    [DRec0, DVar0, ListNode, SVar0] = Args,
+    case check_fields_list(ListNode) of
+        {true, _Length, SFields} ->
+            {Match, Fields} = record_assign_variable_fields(DRec0, SFields, SVar0, Records),
+            Record = erl_syntax:record_expr(DVar0, DRec0, Fields),
+            erl_syntax:block_expr([Match, Record]);
         _ ->
             Forms0
     end;
@@ -114,12 +156,14 @@ transform(record_assign, [atom, variable], Opr, Forms0, Args, Records) ->
     transform(record_assign, [atom, atom, variable], Opr, Forms0, [DRec, DRec, SVar], Records);
 transform(record_assign, [atom, atom, variable], _, _, Args, Records) ->
     [DRec0, SRec0, SVar0] = Args,
-    {Match, Fields} = record_assign_variable_fields(DRec0, SRec0, SVar0, Records),
+    SFields = atom_fields(Records, SRec0),
+    {Match, Fields} = record_assign_variable_fields(DRec0, SFields, SVar0, Records),
     Record = erl_syntax:record_expr(DRec0, Fields),
     erl_syntax:block_expr([Match, Record]);
 transform(record_assign, [atom, variable, atom, variable], _, _, Args, Records) ->
     [DRec0, DVar0, SRec0, SVar0] = Args,
-    {Match, Fields} = record_assign_variable_fields(DRec0, SRec0, SVar0, Records),
+    SFields = atom_fields(Records, SRec0),
+    {Match, Fields} = record_assign_variable_fields(DRec0, SFields, SVar0, Records),
     Record = erl_syntax:record_expr(DVar0, DRec0, Fields),
     erl_syntax:block_expr([Match, Record]);
 transform(_, _, Form0, _Opr, _Args, _Records) ->
@@ -127,20 +171,18 @@ transform(_, _, Form0, _Opr, _Args, _Records) ->
 
 %% Transform Internal API
 record_copy_fields(DRec0, SRec0, SVar0, Records) ->
-    DFields = [erl_syntax:atom_value(Field) || Field <- field_names(Records, DRec0)],
-    SFields = [erl_syntax:atom_value(Field) || Field <- field_names(Records, SRec0)],
+    DFields = atom_fields(Records, DRec0),
+    SFields = atom_fields(Records, SRec0),
     [record_field(SVar0, SRec0, Field0) || Field0 <- DFields, lists:member(Field0, SFields)].
 
-record_assign_list_fields(DRec0, SRec0, SVar0, Records) ->
-    SFields = [erl_syntax:atom_value(Field) || Field <- field_names(Records, SRec0)],
-    DFields = [erl_syntax:atom_value(Field) || Field <- field_names(Records, DRec0)],
+record_assign_list_fields(DRec0, SFields, SVar0, Records) when is_list(SFields) ->
+    DFields = atom_fields(Records, DRec0),
     Dict = dict:from_list(lists:zip(SFields, erl_syntax:list_elements(SVar0))),
     [record_field(Field0, dict:fetch(Field0, Dict))
         || Field0 <- DFields, lists:member(Field0, SFields)].
 
-record_assign_variable_fields(DRec0, SRec0, SVar0, Records) ->
-    DFields = [erl_syntax:atom_value(Field) || Field <- field_names(Records, DRec0)],
-    SFields = [erl_syntax:atom_value(Field) || Field <- field_names(Records, SRec0)],
+record_assign_variable_fields(DRec0, SFields, SVar0, Records) ->
+    DFields = atom_fields(Records, DRec0),
     MatchList = [
         begin
             case lists:member(Field, DFields) of
@@ -156,6 +198,9 @@ record_assign_variable_fields(DRec0, SRec0, SVar0, Records) ->
     {Match, [record_field(Field0, dict:fetch(Field0, Dict))
         || Field0 <- DFields, lists:member(Field0, SFields)]}.
 
+atom_fields(Records, Type) ->
+    [erl_syntax:atom_value(Field) || Field <- field_names(Records, Type)].
+
 record_field(Var0, Rec0, Field0) when is_atom(Field0) ->
     Field = erl_syntax:atom(Field0),
     Access = erl_syntax:record_access(Var0, Rec0, Field),
@@ -167,3 +212,13 @@ record_field(Field0, Var) when is_atom(Field0) ->
 
 temp_var(Field) when is_atom(Field) ->
     erl_syntax:variable("XtTransTempVar____" ++ atom_to_list(Field)).
+
+check_fields_list(ListNode) ->
+    Elements = erl_syntax:list_elements(ListNode),
+    Bool =
+        lists:all(fun(Field) ->
+            erl_syntax:type(Field) =:= atom
+        end, erl_syntax:list_elements(ListNode)),
+    Length = erlang:length(Elements),
+    Fields = [erl_syntax:atom_value(Field) || Field <- Elements],
+    {Bool, Length, Fields}.

@@ -52,6 +52,23 @@ assign_list_4() ->
     Rec1 = #rec1{f1 = 4},
     record_assign(rec1, Rec1, rec2, [101, 102, 103, 104]).
 
+assign_fields_3() ->
+    List = [101, 102, 103, 104],
+    record_assign(rec1, [f1, undefined, any, f3], List).
+
+assign_fields_4() ->
+    Rec1 = #rec1{f1 = 4},
+    List = [101, 102, 103, 104],
+    record_assign(rec1, Rec1, [f1, undefined, any, f3], List).
+
+assign_fields_list_3() ->
+    record_assign(rec1, [f1, undefined, any, f3], [101, 102, 103, 104]).
+
+assign_fields_list_4() ->
+    Rec1 = #rec1{f1 = 4},
+    record_assign(rec1, Rec1, [f1, undefined, any, f3], [101, 102, 103, 104]).
+
+
 -include_lib("eunit/include/eunit.hrl").
 
 -ifdef(TEST).
@@ -74,6 +91,18 @@ record_assign_list_test_() ->
         ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_list_2()),
         ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_list_3()),
         ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_list_4())
+    ].
+
+record_assign_fields_test_() ->
+    [
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_fields_3()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_fields_4())
+    ].
+
+record_assign_fields_list_test_() ->
+    [
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_fields_list_3()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_fields_list_4())
     ].
 
 -endif.
