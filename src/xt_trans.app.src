@@ -1,0 +1,9 @@
+
+%% Copyright (c) JinGan <jg_513@163.com>
+
+{application, xt_trans, [
+    {description, "xt_trans"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {env, []}
+]}.

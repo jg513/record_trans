@@ -1,0 +1,9 @@
+deps/*
+ebin/*
+.idea/*
+.rebar
+Emakefile
+rebar
+run.sh
+xt_trans.iml
+src/user_default.erl
