@@ -89,9 +89,11 @@ do_transform(record_copy, Args, Form, Records) ->
     DArgs = erl_syntax:tuple_elements(DArgs0),
     SArgs = erl_syntax:tuple_elements(SArgs0),
     case copy_args_check(DArgs, SArgs) of
-        true ->
+        {true, copy_transform} ->
             copy_transform(DArgs, SArgs, Form, Records);
-        _ ->
+        {pre_transform, copy_transform} ->
+            pre_copy_transform(DArgs, SArgs, Form, Records);
+        false ->
             Form
     end;
 do_transform(record_assign, Args, Form, Records) ->
@@ -101,9 +103,13 @@ do_transform(record_assign, Args, Form, Records) ->
     case assign_args_check(DArgs, SArgs) of
         {true, assign_list} ->
             assign_list(DArgs, SArgs, Form, Records);
+        {pre_transform, assign_list} ->
+            pre_assign_list(DArgs, SArgs, Form, Records);
         {true, assign_variable} ->
             assign_variable(DArgs, SArgs, Form, Records);
-        _ ->
+        {pre_transform, assign_variable} ->
+            pre_assign_variable(DArgs, SArgs, Form, Records);
+        false ->
             Form
     end;
 do_transform(_Name, _Args, Form, _Records) ->
@@ -115,27 +121,33 @@ copy_args_check(DArgs, SArgs) ->
         case [erl_syntax:type(Arg) || Arg <- DArgs] of
             [atom] ->
                 true;
+            [record_expr] ->
+                pre_transform;
             [atom, variable] ->
                 true;
-            [atom, tuple] ->
+            [atom, record_expr] ->
                 true;
             _ ->
                 false
         end,
     SCheck =
         case [erl_syntax:type(Arg) || Arg <- SArgs] of
-            [atom, variable]->
-                true;
-            [atom, tuple] ->
-                true;
+            [atom, variable] ->
+                copy_transform;
+            [atom, record_expr] ->
+                copy_transform;
             [atom, variable, list] ->
-                true;
-            [atom, tuple, list] ->
-                true;
+                copy_transform;
+            [atom, record_expr, list] ->
+                copy_transform;
             _ ->
                 false
         end,
-    DCheck andalso SCheck.
+    {DCheck, SCheck}.
+
+pre_copy_transform([DRecExpr], SArgs, Form, Records) ->
+    DRec = erl_syntax:record_expr_type(DRecExpr),
+    copy_transform([DRec, DRecExpr], SArgs, Form, Records).
 
 copy_transform([DRec, DVar], SArgs, Form0, Records) ->
     Form = copy_transform([DRec], SArgs, Form0, Records),
@@ -164,9 +176,11 @@ assign_args_check(DArgs, SArgs) ->
         case [erl_syntax:type(Arg) || Arg <- DArgs] of
             [atom] ->
                 true;
+            [record_expr] ->
+                pre_transform;
             [atom, variable] ->
                 true;
-            [atom, tuple] ->
+            [atom, record_expr] ->
                 true;
             _ ->
                 false
@@ -186,7 +200,7 @@ assign_args_check(DArgs, SArgs) ->
                 assign_variable;
             [variable, list] ->
                 assign_variable;
-            [atom, variable]->
+            [atom, variable] ->
                 assign_variable;
             [atom, variable, list] ->
                 assign_variable;
@@ -196,6 +210,10 @@ assign_args_check(DArgs, SArgs) ->
                 false
         end,
     {DCheck, SCheck}.
+
+pre_assign_list([DRecExpr], SArgs, Form, Records) ->
+    DRec = erl_syntax:record_expr_type(DRecExpr),
+    assign_list([DRec, DRecExpr], SArgs, Form, Records).
 
 assign_list([DRec, DVar], SArgs, Form0, Records) ->
     Form = assign_list([DRec], SArgs, Form0, Records),
@@ -246,6 +264,10 @@ assign_list_fields(DRec, SFields, SVar, Records, Fmtrs0) when is_list(SFields) -
                 f_record_field(Field, dict:fetch(Field, Dict), Fmtr)
         end || Field <- DFields, lists:member(Field, SFields)],
     erl_syntax:record_expr(DRec, Fields).
+
+pre_assign_variable([DRecExpr], SArgs, Form, Records) ->
+    DRec = erl_syntax:record_expr_type(DRecExpr),
+    assign_variable([DRec, DRecExpr], SArgs, Form, Records).
 
 assign_variable([DRec, DVar], SArgs, Form0, Records) ->
     Form = assign_variable([DRec], SArgs, Form0, Records),
