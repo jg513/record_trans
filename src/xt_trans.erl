@@ -93,7 +93,7 @@ do_transform(record_copy, Args, Form, Records) ->
             copy_transform(DArgs, SArgs, Form, Records);
         {pre_transform, copy_transform} ->
             pre_copy_transform(DArgs, SArgs, Form, Records);
-        false ->
+        _ ->
             Form
     end;
 do_transform(record_assign, Args, Form, Records) ->
@@ -109,7 +109,7 @@ do_transform(record_assign, Args, Form, Records) ->
             assign_variable(DArgs, SArgs, Form, Records);
         {pre_transform, assign_variable} ->
             pre_assign_variable(DArgs, SArgs, Form, Records);
-        false ->
+        _ ->
             Form
     end;
 do_transform(_Name, _Args, Form, _Records) ->
