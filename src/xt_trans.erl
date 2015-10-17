@@ -16,7 +16,6 @@ parse_transform(Forms0, Options0) ->
     Records = records(Forms0),
     State0 = #state{records = Records, options = Options0},
     {Forms, _State} = forms(Forms0, State0),
-%%     io:format(io_lib:format("~s", [erl_prettypr:format(erl_syntax:form_list(Forms))])),
     Forms.
 
 %% init state records
@@ -191,6 +190,8 @@ assign_args_check(DArgs, SArgs) ->
                 assign_variable;
             [atom, variable, list] ->
                 assign_variable;
+            [variable, list, list] ->
+                assign_variable;
             _ ->
                 false
         end,
@@ -257,24 +258,39 @@ assign_variable([DRec], [SV1, SV2], Form, Records) ->
             SFields = atom_fields(Records, SV1),
             assign_variable_fields(DRec, SFields, SV2, Records, []);
         variable ->
-            Length = erlang:length(atom_fields(Records, DRec)),
             case check_fields_list(SV2) of
-                {true, Length, SFields, Fmtrs} ->
-                    assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
-                {true, _Length, _SFields, Fmtrs} ->
+                {true, _, SFields, []} ->
+                    assign_variable_fields(DRec, SFields, SV1, Records, []);
+                {true, _, _, Fmtrs} ->
                     SFields = atom_fields(Records, DRec),
                     assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
                 false ->
                     Form
             end
     end;
-assign_variable([DRec], [SRec, SVals, SFmtrs], Form, Records) ->
-    SFields = atom_fields(Records, SRec),
-    case check_fields_list(SFmtrs) of
-        {true, _Length, _Fields, Fmtrs} ->
-            assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs);
-        false ->
-            Form
+assign_variable([DRec], [SV1, SVals, SFmtrs], Form, Records) ->
+    case erl_syntax:type(SV1) of
+        atom ->
+            SFields = atom_fields(Records, SV1),
+            case check_fields_list(SFmtrs) of
+                {true, _Length, _Fields, Fmtrs} ->
+                    assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs);
+                false ->
+                    Form
+            end;
+        variable ->
+            SFields = erl_syntax:concrete(SVals),
+            case lists:all(fun erlang:is_atom/1, SFields) of
+                true ->
+                    case check_fields_list(SFmtrs) of
+                        {true, _Length, _SFields, Fmtrs} ->
+                            assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
+                        false ->
+                            Form
+                    end;
+                false ->
+                    Form
+            end
     end.
 
 assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs0) ->

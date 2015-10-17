@@ -43,7 +43,42 @@ f_copy_5() ->
     Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
     record_copy({rec1, Rec1}, {rec2, Rec2, [{f1, integer_to_list}]}).
 
-%% assign fields
+%% assign list fields
+assign_list_2() ->
+    record_assign({rec1}, {[101, 102, 103]}).
+
+assign_list_3() ->
+    record_assign({rec1}, {rec2, [101, 102, 103, 104]}).
+
+assign_list_4() ->
+    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
+    record_assign({rec1, Rec1}, {rec2, [101, 102, 103, 104]}).
+
+assign_fields_list_3() ->
+    record_assign({rec1}, {[101, 102, 103, 104], [f1, undefined, any, f3]}).
+
+assign_fields_list_4() ->
+    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
+    record_assign({rec1, Rec1}, {[101, 102, 103, 104], [f1, undefined, any, f3]}).
+
+f_assign_list_3() ->
+    record_assign({rec1}, {[101, 102, 103], [{f1, integer_to_list}]}).
+
+f_assign_list_4() ->
+    record_assign({rec1}, {rec2, [101, 102, 103, 104], [{f1, integer_to_list}]}).
+
+f_assign_list_5() ->
+    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
+    record_assign({rec1, Rec1}, {rec2, [101, 102, 103, 104], [{f1, integer_to_list}]}).
+
+f_assign_fields_list_3() ->
+    record_assign({rec1}, {[101, 102, 103, 104], [{f1, integer_to_list}, undefined, any, f3]}).
+
+f_assign_fields_list_4() ->
+    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
+    record_assign({rec1, Rec1}, {[101, 102, 103, 104], [{f1, integer_to_list}, undefined, any, f3]}).
+
+%% assign variable fields
 assign_2() ->
     List = [101, 102, 103],
     record_assign({rec1}, {List}).
@@ -57,15 +92,19 @@ assign_4() ->
     List = [101, 102, 103, 104],
     record_assign({rec1, Rec1}, {rec2, List}).
 
-assign_list_2() ->
-    record_assign({rec1}, {[101, 102, 103]}).
+f_assign_4() ->
+    List = [101, 102, 103, 104],
+    record_assign({rec1}, {rec2, List, [{f1, integer_to_list}]}).
 
-assign_list_3() ->
-    record_assign({rec1}, {rec2, [101, 102, 103, 104]}).
-
-assign_list_4() ->
+f_assign_5() ->
     Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
-    record_assign({rec1, Rec1}, {rec2, [101, 102, 103, 104]}).
+    List = [101, 102, 103, 104],
+    record_assign({rec1, Rec1}, {rec2, List, [{f1, integer_to_list}]}).
+
+%% assign variable fields with formaters
+assign_fields_2() ->
+    List = [101, 102, 103],
+    record_assign({rec1}, {List, [{f1, integer_to_list}]}).
 
 assign_fields_3() ->
     List = [101, 102, 103, 104],
@@ -76,53 +115,18 @@ assign_fields_4() ->
     List = [101, 102, 103, 104],
     record_assign({rec1, Rec1}, {List, [f1, undefined, any, f3]}).
 
-assign_fields_list_3() ->
-    record_assign({rec1}, {[101, 102, 103, 104], [f1, undefined, any, f3]}).
-
-assign_fields_list_4() ->
-    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
-    record_assign({rec1, Rec1}, {[101, 102, 103, 104], [f1, undefined, any, f3]}).
-
-
-%% assign fields with formaters
 f_assign_3() ->
     List = [101, 102, 103],
-    record_assign({rec1}, {List, [{f1, integer_to_list}]}).
-
-f_assign_4() ->
-    List = [101, 102, 103, 104],
-    record_assign({rec1}, {rec2, List, [{f1, integer_to_list}]}).
-
-f_assign_5() ->
-    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
-    List = [101, 102, 103, 104],
-    record_assign({rec1, Rec1}, {rec2, List, [{f1, integer_to_list}]}).
-
-f_assign_list_3() ->
-    record_assign({rec1}, {[101, 102, 103], [{f1, integer_to_list}]}).
-
-f_assign_list_4() ->
-    record_assign({rec1}, {rec2, [101, 102, 103, 104], [{f1, integer_to_list}]}).
-
-f_assign_list_5() ->
-    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
-    record_assign({rec1, Rec1}, {rec2, [101, 102, 103, 104], [{f1, integer_to_list}]}).
+    record_assign({rec1}, {List, [f1, undefined, f3], [{f1, integer_to_list}]}).
 
 f_assign_fields_3() ->
     List = [101, 102, 103, 104],
-    record_assign({rec1}, {List, [{f1, integer_to_list}, undefined, any, f3]}).
+    record_assign({rec1}, {List, [f1, undefined, any, f3], [{f1, integer_to_list}]}).
 
 f_assign_fields_4() ->
     Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
     List = [101, 102, 103, 104],
-    record_assign({rec1, Rec1}, {List, [{f1, integer_to_list}, undefined, any, f3]}).
-
-f_assign_fields_list_3() ->
-    record_assign({rec1}, {[101, 102, 103, 104], [{f1, integer_to_list}, undefined, any, f3]}).
-
-f_assign_fields_list_4() ->
-    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
-    record_assign({rec1, Rec1}, {[101, 102, 103, 104], [{f1, integer_to_list}, undefined, any, f3]}).
+    record_assign({rec1, Rec1}, {List, [f1, undefined, any, f3], [{f1, integer_to_list}]}).
 
 
 -include_lib("eunit/include/eunit.hrl").
@@ -150,7 +154,7 @@ assign_test_() ->
 
 f_assign_test_() ->
     [
-        ?_assertEqual(#rec1{f1 = "101", f2 = 102, f3 = 103}, f_assign_3()),
+        ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 103}, f_assign_3()),
         ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 102}, f_assign_4()),
         ?_assertEqual(#rec1{f1 = "101", f2 = 5, f3 = 102}, f_assign_5())
     ].
