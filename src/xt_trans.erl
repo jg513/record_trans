@@ -60,13 +60,13 @@ forms([Form0 | Forms0], State0) ->
 forms([], State) ->
     {[], State}.
 
-form(application, Form0, #state{records = Records} = State0) ->
+form(application, Form0, #state{records = Records} = State) ->
     Oprt = erl_syntax:application_operator(Form0),
     Args = erl_syntax:application_arguments(Form0),
     Form = transform(erl_syntax:type(Oprt), Form0, Oprt, Args, Records),
-    {Form, State0};
-form(_, Form0, State0) ->
-    {Form0, State0}.
+    {Form, State};
+form(_, Form, State) ->
+    {Form, State}.
 
 %% transform
 transform(atom, Form, Oprt, Args0, Records) ->
@@ -74,7 +74,7 @@ transform(atom, Form, Oprt, Args0, Records) ->
         {true, Args} ->
             try do_transform(erl_syntax:atom_value(Oprt), Args, Form, Records)
             catch
-                _ ->
+                _Err: _Reason ->
                     Form
             end;
         _ ->
@@ -231,6 +231,8 @@ assign_args_check(DArgs, SArgs) ->
                 assign_list;
             [list, list] ->
                 assign_list;
+            [list, list, list] ->
+                assign_list;
             [atom, list] ->
                 assign_list;
             [atom, list, list] ->
@@ -267,29 +269,40 @@ assign_list([DRec], [SV1, SV2], Form, Records) ->
             assign_list_fields(DRec, SFields, SV2, Records, []);
         list ->
             Length = erl_syntax:list_length(SV1),
-            case check_fields_list(SV2) of
-                {true, Length, SFields, Fmtrs} ->
-                    assign_list_fields(DRec, SFields, SV1, Records, Fmtrs);
-                {true, _, _, Fmtrs} ->
+            case check_list_elments(SV2) of
+                {fields, Length, SFields} ->
+                    assign_list_fields(DRec, SFields, SV1, Records, []);
+                {formaters, Fmtrs} ->
                     SFields = atom_fields(Records, DRec),
                     assign_list_fields(DRec, SFields, SV1, Records, Fmtrs);
                 false ->
                     Form
             end
     end;
-assign_list([DRec], [SRec, SVals, SFmtrs], Form, Records) ->
-    SFields = atom_fields(Records, SRec),
-    Length = erlang:length(SFields),
-    case erl_syntax:list_length(SVals) of
-        Length ->
-            case check_fields_list(SFmtrs) of
-                {true, _Length, _Fields, Fmtrs} ->
-                    assign_list_fields(DRec, SFields, SVals, Records, Fmtrs);
+assign_list([DRec], [SV1, SVals, SFmtrs], Form, Records) ->
+    case erl_syntax:type(SV1) of
+        atom ->
+            SFields = atom_fields(Records, SV1),
+            Length = erlang:length(SFields),
+            case erl_syntax:list_length(SVals) of
+                Length ->
+                    case check_list_elments(SFmtrs) of
+                        {formaters, Fmtrs} ->
+                            assign_list_fields(DRec, SFields, SVals, Records, Fmtrs);
+                        _ ->
+                            Form
+                    end;
                 _ ->
                     Form
             end;
-        _ ->
-            Form
+        list ->
+            Length = erl_syntax:list_length(SV1),
+            case {check_list_elments(SVals), check_list_elments(SFmtrs)} of
+                {{fields, Length, SFields}, {formaters, Fmtrs}} ->
+                    assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
+                _ ->
+                    Form
+            end
     end.
 
 assign_list_fields(DRec, SFields, SVar, Records, Fmtrs0) when is_list(SFields) ->
@@ -320,10 +333,10 @@ assign_variable([DRec], [SV1, SV2], Form, Records) ->
             SFields = atom_fields(Records, SV1),
             assign_variable_fields(DRec, SFields, SV2, Records, []);
         variable ->
-            case check_fields_list(SV2) of
-                {true, _, SFields, []} ->
+            case check_list_elments(SV2) of
+                {fields, _, SFields} ->
                     assign_variable_fields(DRec, SFields, SV1, Records, []);
-                {true, _, _, Fmtrs} ->
+                {formaters, Fmtrs} ->
                     SFields = atom_fields(Records, DRec),
                     assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
                 false ->
@@ -334,23 +347,17 @@ assign_variable([DRec], [SV1, SVals, SFmtrs], Form, Records) ->
     case erl_syntax:type(SV1) of
         atom ->
             SFields = atom_fields(Records, SV1),
-            case check_fields_list(SFmtrs) of
-                {true, _Length, _Fields, Fmtrs} ->
+            case check_list_elments(SFmtrs) of
+                {formaters, Fmtrs} ->
                     assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs);
                 false ->
                     Form
             end;
         variable ->
-            SFields = erl_syntax:concrete(SVals),
-            case lists:all(fun erlang:is_atom/1, SFields) of
-                true ->
-                    case check_fields_list(SFmtrs) of
-                        {true, _Length, _SFields, Fmtrs} ->
-                            assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
-                        false ->
-                            Form
-                    end;
-                false ->
+            case {check_list_elments(SVals), check_list_elments(SFmtrs)} of
+                {{fields, _Length, SFields}, {formaters, Fmtrs}} ->
+                    assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
+                _ ->
                     Form
             end
     end.
@@ -441,34 +448,22 @@ f_record_field(Var0, Rec0, Field0, {_, Fun}) when is_atom(Field0) ->
     erl_syntax:revert(erl_syntax:record_field(Field, Value)).
 
 temp_var(Field) when is_atom(Field) ->
-    erl_syntax:variable("XtTransTempVar____" ++ atom_to_list(Field)).
+    erl_syntax:variable("XtTrans_" ++ atom_to_list(Field)).
 
-check_fields_list(Fields0) ->
-    Result =
-        try
-            lists:foldr(fun(Field0, {FieldsAcc, FmtrsAcc}) ->
-                case erl_syntax:type(Field0) of
-                    atom ->
-                        {[erl_syntax:atom_value(Field0) | FieldsAcc], FmtrsAcc};
-                    tuple ->
-                        case erl_syntax:tuple_elements(Field0) of
-                            [Field, Fmtr] ->
-                                FieldName = erl_syntax:atom_value(Field),
-                                {[FieldName | FieldsAcc], [{FieldName, Fmtr} | FmtrsAcc]};
-                            _ ->
-                                throw(false)
-                        end;
-                    _ ->
-                        throw(false)
-                end
-            end, {[], []}, erl_syntax:list_elements(Fields0))
-        catch
-            _ ->
-                false
-        end,
-    case Result of
-        false ->
-            false;
-        {Fields, Fmtrs} ->
-            {true, erlang:length(Fields), Fields, Fmtrs}
+check_list_elments(ListExpr) ->
+    Eles = erl_syntax:list_elements(ListExpr),
+    Types = [erl_syntax:type(Ele) || Ele <- Eles],
+    case lists:all(fun(Type) -> Type =:= tuple end, Types) of
+        true ->
+            TuplesEles = [erl_syntax:tuple_elements(Ele) || Ele <- Eles],
+            Fmtrs = [{erl_syntax:atom_value(Field), Fmtr} || [Field, Fmtr] <- TuplesEles],
+            {formaters, Fmtrs};
+        _ ->
+            case lists:all(fun(Type) -> Type =:= atom end, Types) of
+                true ->
+                    Fields = [erl_syntax:atom_value(Ele) || Ele <- Eles],
+                    {fields, erlang:length(Fields), Fields};
+                _ ->
+                    false
+            end
     end.

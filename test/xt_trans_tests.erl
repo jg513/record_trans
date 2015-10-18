@@ -88,7 +88,7 @@ f_assign_list_2() ->
     record_assign({rec1}, {rec2, [101, 102, 103, 104], [{f1, integer_to_list}]}).
 
 f_assign_list_3() ->
-    record_assign({rec1}, {[101, 102, 103, 104], [{f1, integer_to_list}, undefined, any, f3]}).
+    record_assign({rec1}, {[101, 102, 103, 104], [f1, undefined, any, f3], [{f1, integer_to_list}]}).
 
 %% assign variable fields
 assign_variable_1() ->
