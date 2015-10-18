@@ -103,15 +103,15 @@ transform_args_check(Args) ->
                         erl_syntax:tuple([SArgs0]);
                     variable ->
                         erl_syntax:tuple([SArgs0]);
+                    record_expr ->
+                        erl_syntax:tuple([SArgs0]);
                     tuple ->
                         SArgs0;
                     _ ->
                         false
                 end,
-            case {DArgs, SArgs} of
-                {false, _} ->
-                    false;
-                {_, false} ->
+            case lists:member(false, [DArgs, SArgs]) of
+                true ->
                     false;
                 _ ->
                     {true, [DArgs, SArgs]}
@@ -122,13 +122,11 @@ transform_args_check(Args) ->
 
 do_transform(record_copy, Args, Form, Records) ->
     [DArgs0, SArgs0] = Args,
-    DArgs = erl_syntax:tuple_elements(DArgs0),
-    SArgs = erl_syntax:tuple_elements(SArgs0),
-    case copy_args_check(DArgs, SArgs) of
-        {true, copy_transform} ->
+    DArgs1 = erl_syntax:tuple_elements(DArgs0),
+    SArgs1 = erl_syntax:tuple_elements(SArgs0),
+    case copy_args_check(DArgs1, SArgs1) of
+        {true, [DArgs, SArgs]} ->
             copy_transform(DArgs, SArgs, Form, Records);
-        {pre_transform, copy_transform} ->
-            pre_copy_transform(DArgs, SArgs, Form, Records);
         _ ->
             Form
     end;
@@ -152,38 +150,44 @@ do_transform(_Name, _Args, Form, _Records) ->
     Form.
 
 %% copy and transform fields
-copy_args_check(DArgs, SArgs) ->
-    DCheck =
-        case [erl_syntax:type(Arg) || Arg <- DArgs] of
+copy_args_check(DArgs0, SArgs0) ->
+    DArgs =
+        case [erl_syntax:type(Arg) || Arg <- DArgs0] of
             [atom] ->
-                true;
+                DArgs0;
             [record_expr] ->
-                pre_transform;
+                [DArg] = DArgs0,
+                [erl_syntax:record_expr_type(DArg), DArg];
             [atom, variable] ->
-                true;
+                DArgs0;
             [atom, record_expr] ->
-                true;
+                DArgs0;
             _ ->
                 false
         end,
-    SCheck =
-        case [erl_syntax:type(Arg) || Arg <- SArgs] of
+    SArgs =
+        case [erl_syntax:type(Arg) || Arg <- SArgs0] of
+            [record_expr] ->
+                [SArg] = SArgs0,
+                [erl_syntax:record_expr_type(SArg), SArg];
             [atom, variable] ->
-                copy_transform;
+                SArgs0;
             [atom, record_expr] ->
-                copy_transform;
+                SArgs0;
             [atom, variable, list] ->
-                copy_transform;
+                SArgs0;
             [atom, record_expr, list] ->
-                copy_transform;
+                SArgs0;
             _ ->
                 false
         end,
-    {DCheck, SCheck}.
-
-pre_copy_transform([DRecExpr], SArgs, Form, Records) ->
-    DRec = erl_syntax:record_expr_type(DRecExpr),
-    copy_transform([DRec, DRecExpr], SArgs, Form, Records).
+    Args = [DArgs, SArgs],
+    case lists:member(false, Args) of
+        true ->
+            false;
+        _ ->
+            {true, Args}
+    end.
 
 copy_transform([DRec, DVar], SArgs, Form0, Records) ->
     Form = copy_transform([DRec], SArgs, Form0, Records),

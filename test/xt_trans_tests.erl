@@ -25,16 +25,13 @@ formater(Field) ->
 
 %% tests for destination record
 copy_1() ->
-    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
-    record_copy(rec1, {rec2, Rec2}).
+    record_copy(rec1, #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104}).
 
 copy_2() ->
-    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
-    record_copy(#rec1{f1 = 4, f2 = 5, f3 = 6}, {rec2, Rec2}).
+    record_copy(#rec1{f1 = 4, f2 = 5, f3 = 6}, #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104}).
 
 copy_3() ->
-    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
-    record_copy({rec1}, {rec2, Rec2}).
+    record_copy(rec1, {rec2, #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104}}).
 
 copy_4() ->
     Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
