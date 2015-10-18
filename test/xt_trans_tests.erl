@@ -26,18 +26,26 @@ formater(Field) ->
 %% tests for destination record
 copy_1() ->
     Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
-    record_copy({rec1}, {rec2, Rec2}).
+    record_copy(rec1, {rec2, Rec2}).
 
 copy_2() ->
     Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
-    record_copy({#rec1{f1 = 4, f2 = 5, f3 = 6}}, {rec2, Rec2}).
+    record_copy(#rec1{f1 = 4, f2 = 5, f3 = 6}, {rec2, Rec2}).
 
 copy_3() ->
+    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
+    record_copy({rec1}, {rec2, Rec2}).
+
+copy_4() ->
+    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
+    record_copy({#rec1{f1 = 4, f2 = 5, f3 = 6}}, {rec2, Rec2}).
+
+copy_5() ->
     Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
     Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
     record_copy({rec1, Rec1}, {rec2, Rec2}).
 
-copy_4() ->
+copy_6() ->
     Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
     record_copy({rec1, #rec1{f1 = 4, f2 = 5, f3 = 6}}, {rec2, Rec2}).
 
@@ -64,12 +72,15 @@ f_copy_2() ->
 
 %% assign list fields
 assign_list_1() ->
-    record_assign({rec1}, {[101, 102, 103]}).
+    record_assign({rec1}, [101, 102, 103]).
 
 assign_list_2() ->
-    record_assign({rec1}, {rec2, [101, 102, 103, 104]}).
+    record_assign({rec1}, {[101, 102, 103]}).
 
 assign_list_3() ->
+    record_assign({rec1}, {rec2, [101, 102, 103, 104]}).
+
+assign_list_4() ->
     record_assign({rec1}, {[101, 102, 103, 104], [f1, undefined, any, f3]}).
 
 %% assign list fields with formaters
@@ -85,13 +96,17 @@ f_assign_list_3() ->
 %% assign variable fields
 assign_variable_1() ->
     List = [101, 102, 103],
-    record_assign({rec1}, {List}).
+    record_assign({rec1}, List).
 
 assign_variable_2() ->
+    List = [101, 102, 103],
+    record_assign({rec1}, {List}).
+
+assign_variable_3() ->
     List = [101, 102, 103, 104],
     record_assign({rec1}, {rec2, List}).
 
-assign_variable_3() ->
+assign_variable_4() ->
     List = [101, 102, 103, 104],
     record_assign({rec1}, {List, [f1, undefined, any, f3]}).
 
@@ -116,8 +131,10 @@ destination_test_() ->
     [
         ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, copy_1()),
         ?_assertEqual(#rec1{f1 = 101, f2 = 5, f3 = 102}, copy_2()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 5, f3 = 102}, copy_3()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, copy_3()),
         ?_assertEqual(#rec1{f1 = 101, f2 = 5, f3 = 102}, copy_4()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 5, f3 = 102}, copy_5()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 5, f3 = 102}, copy_6()),
         ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_1()),
         ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_2()),
         ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_3()),
@@ -133,8 +150,9 @@ f_copy_test_() ->
 assign_list_test_() ->
     [
         ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_list_1()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_list_2()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_list_3())
+        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_list_2()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_list_3()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_list_4())
     ].
 
 f_assign_list_test_() ->
@@ -148,8 +166,9 @@ f_assign_list_test_() ->
 assign_variable_test_() ->
     [
         ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_variable_1()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_variable_2()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_variable_3())
+        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_variable_2()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_variable_3()),
+        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_variable_4())
     ].
 
 f_assign_variable_test_() ->

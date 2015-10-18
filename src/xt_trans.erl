@@ -69,11 +69,10 @@ form(_, Form0, State0) ->
     {Form0, State0}.
 
 %% transform
-transform(atom, Form, Oprt, Args, Records) ->
-    case [erl_syntax:type(Arg) || Arg <- Args] of
-        [tuple, tuple] ->
-            Name = erl_syntax:atom_value(Oprt),
-            try do_transform(Name, Args, Form, Records)
+transform(atom, Form, Oprt, Args0, Records) ->
+    case transform_args_check(Args0) of
+        {true, Args} ->
+            try do_transform(erl_syntax:atom_value(Oprt), Args, Form, Records)
             catch
                 _ ->
                     Form
@@ -83,6 +82,43 @@ transform(atom, Form, Oprt, Args, Records) ->
     end;
 transform(_, Form, _Oprt, _Args, _Records) ->
     Form.
+
+transform_args_check(Args) ->
+    case Args of
+        [DArgs0, SArgs0] ->
+            DArgs =
+                case erl_syntax:type(DArgs0) of
+                    atom ->
+                        erl_syntax:tuple([DArgs0]);
+                    record_expr ->
+                        erl_syntax:tuple([DArgs0]);
+                    tuple ->
+                        DArgs0;
+                    _ ->
+                        false
+                end,
+            SArgs =
+                case erl_syntax:type(SArgs0) of
+                    list ->
+                        erl_syntax:tuple([SArgs0]);
+                    variable ->
+                        erl_syntax:tuple([SArgs0]);
+                    tuple ->
+                        SArgs0;
+                    _ ->
+                        false
+                end,
+            case {DArgs, SArgs} of
+                {false, _} ->
+                    false;
+                {_, false} ->
+                    false;
+                _ ->
+                    {true, [DArgs, SArgs]}
+            end;
+        _ ->
+            false
+    end.
 
 do_transform(record_copy, Args, Form, Records) ->
     [DArgs0, SArgs0] = Args,
