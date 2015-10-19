@@ -7,172 +7,94 @@
 
 -compile([{parse_transform, xt_trans}]).
 
--record(rec1, {
+-record(dst, {
     f1 = 1,
-    f2 = 2,
-    f3 = 3
+    f2 = 2
 }).
 
--record(rec2, {
-    f1 = 11,
+-record(src, {
+    f2 = 11,
     f3 = 12,
-    f4 = 13,
-    f5 = 14
+    f4 = 13
 }).
 
-formater(Field) ->
-    integer_to_list(Field).
-
-%% tests for destination record
-copy_1() ->
-    record_copy(rec1, #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104}).
-
-copy_2() ->
-    record_copy(#rec1{f1 = 4, f2 = 5, f3 = 6}, #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104}).
-
-copy_3() ->
-    record_copy(rec1, {rec2, #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104}}).
-
-copy_4() ->
-    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
-    record_copy({#rec1{f1 = 4, f2 = 5, f3 = 6}}, {rec2, Rec2}).
-
-copy_5() ->
-    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
-    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
-    record_copy({rec1, Rec1}, {rec2, Rec2}).
-
-copy_6() ->
-    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
-    record_copy({rec1, #rec1{f1 = 4, f2 = 5, f3 = 6}}, {rec2, Rec2}).
-
-assign_1() ->
-    record_assign({rec1}, {[101, 102, 103]}).
-
-assign_2() ->
-    record_assign({#rec1{f1 = 4, f2 = 5, f3 = 6}}, {[101, 102, 103]}).
-
-assign_3() ->
-    Rec1 = #rec1{f1 = 4, f2 = 5, f3 = 6},
-    record_assign({rec1, Rec1}, {[101, 102, 103]}).
-
-assign_4() ->
-    record_assign({rec1, #rec1{f1 = 4, f2 = 5, f3 = 6}}, {[101, 102, 103]}).
-
-%% record_copy with formaters
-f_copy_1() ->
-    Rec2 = #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104},
-    record_copy({rec1}, {rec2, Rec2, [{f1, ?MODULE:formater}, {any, module:function}]}).
-
-f_copy_2() ->
-    record_copy({rec1}, {rec2, #rec2{f1 = 101, f3 = 102, f4 = 103, f5 = 104}, [{f1, ?MODULE:formater}, {any, module:function}]}).
-
-%% assign list fields
-assign_list_1() ->
-    record_assign({rec1}, [101, 102, 103]).
-
-assign_list_2() ->
-    record_assign({rec1}, {[101, 102, 103]}).
-
-assign_list_3() ->
-    record_assign({rec1}, {rec2, [101, 102, 103, 104]}).
-
-assign_list_4() ->
-    record_assign({rec1}, {[101, 102, 103, 104], [f1, undefined, any, f3]}).
-
-%% assign list fields with formaters
-f_assign_list_1() ->
-    record_assign({rec1}, {[101, 102, 103], [{f1, integer_to_list}]}).
-
-f_assign_list_2() ->
-    record_assign({rec1}, {rec2, [101, 102, 103, 104], [{f1, integer_to_list}]}).
-
-f_assign_list_3() ->
-    record_assign({rec1}, {[101, 102, 103, 104], [f1, undefined, any, f3], [{f1, integer_to_list}]}).
-
-%% assign variable fields
-assign_variable_1() ->
-    List = [101, 102, 103],
-    record_assign({rec1}, List).
-
-assign_variable_2() ->
-    List = [101, 102, 103],
-    record_assign({rec1}, {List}).
-
-assign_variable_3() ->
-    List = [101, 102, 103, 104],
-    record_assign({rec1}, {rec2, List}).
-
-assign_variable_4() ->
-    List = [101, 102, 103, 104],
-    record_assign({rec1}, {List, [f1, undefined, any, f3]}).
-
-%% assign variable fields with formaters
-f_assign_variable_1() ->
-    List = [101, 102, 103],
-    record_assign({rec1}, {List, [{f1, integer_to_list}]}).
-
-f_assign_variable_2() ->
-    List = [101, 102, 103, 104],
-    record_assign({rec1}, {rec2, List, [{f1, integer_to_list}]}).
-
-f_assign_variable_3() ->
-    List = [101, 102, 103, 104],
-    record_assign({rec1}, {List, [f1, undefined, any, f3], [{f1, integer_to_list}]}).
+formater(F1, F2) ->
+    F1 + F2.
 
 -include_lib("eunit/include/eunit.hrl").
 
 -ifdef(TEST).
 
-destination_test_() ->
+copy_dst_test_() ->
+    Dst = #dst{},
     [
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, copy_1()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 5, f3 = 102}, copy_2()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, copy_3()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 5, f3 = 102}, copy_4()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 5, f3 = 102}, copy_5()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 5, f3 = 102}, copy_6()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_1()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_2()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_3()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_4())
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy(dst, src)),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy({dst}, src)),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy(#dst{}, src)),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy({#dst{}}, src)),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy({dst, #dst{}}, src)),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy({dst, Dst}, src))
     ].
 
-f_copy_test_() ->
+copy_src_test_() ->
+    Src = #src{},
     [
-        ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 102}, f_copy_1()),
-        ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 102}, f_copy_2())
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy(dst, src)),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy(dst, {src})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy(dst, {#src{}})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy(dst, {src, #src{}})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_copy(dst, {src, Src}))
     ].
 
-assign_list_test_() ->
+copy_fmt_test_() ->
     [
-        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_list_1()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_list_2()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_list_3()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_list_4())
+        ?_assertEqual(#dst{f1 = 1, f2 = "11"}, record_copy(dst, {src, [{f2, erlang:integer_to_list}]})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 25}, record_copy(dst, {src, [{f2, formater, [f3, f4]}]}))
     ].
 
-f_assign_list_test_() ->
+assign_dst_test() ->
+    Dst = #dst{},
     [
-        ?_assertEqual(#rec1{f1 = "101", f2 = 102, f3 = 103}, f_assign_list_1()),
-        ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 102}, f_assign_list_2()),
-        ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 104}, f_assign_list_3())
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_assign(dst, [11, 12])),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_assign({dst}, [11, 12])),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_assign(#dst{}, [11, 12])),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_assign({#dst{}}, [11, 12])),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_assign({dst, #dst{}}, [11, 12])),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_assign({dst, Dst}, [11, 12]))
     ].
 
-
-assign_variable_test_() ->
+assign_list_src_test_() ->
     [
-        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_variable_1()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 102, f3 = 103}, assign_variable_2()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 102}, assign_variable_3()),
-        ?_assertEqual(#rec1{f1 = 101, f2 = 2, f3 = 104}, assign_variable_4())
+        ?_assertEqual(#dst{f1 = 11, f2 = 12}, record_assign(dst, [11, 12])),
+        ?_assertEqual(#dst{f1 = 11, f2 = 12}, record_assign(dst, {[11, 12]})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_assign(dst, {src, [11, 12, 13]})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 12}, record_assign(dst, {[11, 12, 13], [other, f2, any]}))
     ].
 
-f_assign_variable_test_() ->
+assign_list_fmt_test_() ->
     [
-        ?_assertEqual(#rec1{f1 = "101", f2 = 102, f3 = 103}, f_assign_variable_1()),
-        ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 102}, f_assign_variable_2()),
-        ?_assertEqual(#rec1{f1 = "101", f2 = 2, f3 = 104}, f_assign_variable_3())
+        ?_assertEqual(#dst{f1 = 11, f2 = 23}, record_assign(dst, {[11, 12], [{f2, formater, [f1, f2]}]})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 25}, record_assign(dst, {src, [11, 12, 13], [{f2, formater, [f3, f4]}]})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 25}, record_assign(dst, {[11, 12, 13], [other, f2, any], [{f2, formater, [f2, any]}]}))
+    ].
+
+assign_variable_src_test_() ->
+    List2 = [11, 12],
+    List3 = [11, 12, 13],
+    [
+        ?_assertEqual(#dst{f1 = 11, f2 = 12}, record_assign(dst, List2)),
+        ?_assertEqual(#dst{f1 = 11, f2 = 12}, record_assign(dst, {List2})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 11}, record_assign(dst, {src, List3})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 12}, record_assign(dst, {List3, [other, f2, any]}))
+    ].
+
+assign_variable_fmt_test_() ->
+    List2 = [11, 12],
+    List3 = [11, 12, 13],
+    [
+        ?_assertEqual(#dst{f1 = 11, f2 = 23}, record_assign(dst, {List2, [{f2, formater, [f1, f2]}]})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 25}, record_assign(dst, {src, List3, [{f2, formater, [f3, f4]}]})),
+        ?_assertEqual(#dst{f1 = 1, f2 = 25}, record_assign(dst, {List3, [other, f2, any], [{f2, formater, [f2, any]}]}))
     ].
 
 -endif.

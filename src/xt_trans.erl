@@ -3,7 +3,6 @@
 
 -module(xt_trans).
 
--compile(export_all).
 -export([parse_transform/2]).
 
 -record(state, {
@@ -99,6 +98,8 @@ transform_args_check(Args) ->
                 end,
             SArgs =
                 case erl_syntax:type(SArgs0) of
+                    atom ->
+                        erl_syntax:tuple([SArgs0]);
                     list ->
                         erl_syntax:tuple([SArgs0]);
                     variable ->
@@ -167,6 +168,10 @@ copy_args_check(DArgs0, SArgs0) ->
         end,
     SArgs =
         case [erl_syntax:type(Arg) || Arg <- SArgs0] of
+            [atom] ->
+                [SArg1] = SArgs0,
+                SArg2 = erl_syntax:revert(erl_syntax:record_expr(SArg1, [])),
+                [SArg1, SArg2];
             [record_expr] ->
                 [SArg] = SArgs0,
                 [erl_syntax:record_expr_type(SArg), SArg];
@@ -174,6 +179,13 @@ copy_args_check(DArgs0, SArgs0) ->
                 SArgs0;
             [atom, record_expr] ->
                 SArgs0;
+            [atom, list] ->
+                [SArg1, SArg2] = SArgs0,
+                SArg3 = erl_syntax:revert(erl_syntax:record_expr(SArg1, [])),
+                [SArg1, SArg3, SArg2];
+            [record_expr, list] ->
+                [SArg1, SArg2] = SArgs0,
+                [erl_syntax:record_expr_type(SArg1), SArg1, SArg2];
             [atom, variable, list] ->
                 SArgs0;
             [atom, record_expr, list] ->
@@ -193,22 +205,29 @@ copy_transform([DRec, DVar], SArgs, Form0, Records) ->
     Form = copy_transform([DRec], SArgs, Form0, Records),
     record_expr_add_arg(DVar, Form);
 copy_transform([DRec], [SRec, SVar], _Form, Records) ->
-    Fields = copy_fields(DRec, SRec, SVar, Records, []),
-    erl_syntax:record_expr(DRec, Fields);
-copy_transform([DRec], [SRec, SVar, Fmtrs], _Form, Records) ->
-    Fields = copy_fields(DRec, SRec, SVar, Records, Fmtrs),
-    erl_syntax:record_expr(DRec, Fields).
+    copy_fields(DRec, SRec, SVar, Records, []);
+copy_transform([DRec], [SRec, SV1, Fmtrs0], _Form, Records) ->
+    case erl_syntax:type(SV1) of
+        variable ->
+            {formaters, Fmtrs, _Extras, _Covers} = check_list_elments(Fmtrs0),
+            copy_fields(DRec, SRec, SV1, Records, Fmtrs);
+        record_expr ->
+            {formaters, Fmtrs, _Extras, _Covers} = check_list_elments(Fmtrs0),
+            copy_fields(DRec, SRec, SV1, Records, Fmtrs)
+    end.
 
 copy_fields(DRec, SRec, SVar, Records, Fmtrs0) ->
     DFields = atom_fields(Records, DRec),
     SFields = atom_fields(Records, SRec),
     Fmtrs = formaters(Fmtrs0),
-    [case lists:keyfind(Field, 1, Fmtrs) of
-         false ->
-             record_field(SVar, SRec, Field);
-         Fmtr ->
-             f_record_field(SVar, SRec, Field, Fmtr)
-     end || Field <- DFields, lists:member(Field, SFields)].
+    Fields = [
+        case lists:keyfind(Field, 1, Fmtrs) of
+            false ->
+                record_field(SVar, SRec, Field);
+            Fmtr ->
+                f_record_field(SVar, SRec, erl_syntax:atom(Field), Fmtr)
+        end || Field <- DFields, lists:member(Field, SFields)],
+    erl_syntax:record_expr(DRec, Fields).
 
 %% assign and transform fields
 assign_args_check(DArgs, SArgs) ->
@@ -272,7 +291,7 @@ assign_list([DRec], [SV1, SV2], Form, Records) ->
             case check_list_elments(SV2) of
                 {fields, Length, SFields} ->
                     assign_list_fields(DRec, SFields, SV1, Records, []);
-                {formaters, Fmtrs} ->
+                {formaters, Fmtrs, _Extras, _Covers} ->
                     SFields = atom_fields(Records, DRec),
                     assign_list_fields(DRec, SFields, SV1, Records, Fmtrs);
                 false ->
@@ -287,7 +306,7 @@ assign_list([DRec], [SV1, SVals, SFmtrs], Form, Records) ->
             case erl_syntax:list_length(SVals) of
                 Length ->
                     case check_list_elments(SFmtrs) of
-                        {formaters, Fmtrs} ->
+                        {formaters, Fmtrs, _Extras, _Covers} ->
                             assign_list_fields(DRec, SFields, SVals, Records, Fmtrs);
                         _ ->
                             Form
@@ -298,8 +317,8 @@ assign_list([DRec], [SV1, SVals, SFmtrs], Form, Records) ->
         list ->
             Length = erl_syntax:list_length(SV1),
             case {check_list_elments(SVals), check_list_elments(SFmtrs)} of
-                {{fields, Length, SFields}, {formaters, Fmtrs}} ->
-                    assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
+                {{fields, Length, SFields}, {formaters, Fmtrs, _Extras, _Covers}} ->
+                    assign_list_fields(DRec, SFields, SV1, Records, Fmtrs);
                 _ ->
                     Form
             end
@@ -314,7 +333,7 @@ assign_list_fields(DRec, SFields, SVar, Records, Fmtrs0) when is_list(SFields) -
             false ->
                 record_field(Field, dict:fetch(Field, Dict));
             Fmtr ->
-                f_record_field(Field, dict:fetch(Field, Dict), Fmtr)
+                f_record_field(erl_syntax:atom(Field), Dict, Fmtr)
         end || Field <- DFields, lists:member(Field, SFields)],
     erl_syntax:record_expr(DRec, Fields).
 
@@ -331,14 +350,14 @@ assign_variable([DRec], [SV1, SV2], Form, Records) ->
     case erl_syntax:type(SV1) of
         atom ->
             SFields = atom_fields(Records, SV1),
-            assign_variable_fields(DRec, SFields, SV2, Records, []);
+            assign_variable_fields(DRec, SFields, SV2, Records, [], [], []);
         variable ->
             case check_list_elments(SV2) of
                 {fields, _, SFields} ->
-                    assign_variable_fields(DRec, SFields, SV1, Records, []);
-                {formaters, Fmtrs} ->
+                    assign_variable_fields(DRec, SFields, SV1, Records, [], [], []);
+                {formaters, Fmtrs, Extras, Covers} ->
                     SFields = atom_fields(Records, DRec),
-                    assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
+                    assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs, Extras, Covers);
                 false ->
                     Form
             end
@@ -346,28 +365,29 @@ assign_variable([DRec], [SV1, SV2], Form, Records) ->
 assign_variable([DRec], [SV1, SVals, SFmtrs], Form, Records) ->
     case erl_syntax:type(SV1) of
         atom ->
-            SFields = atom_fields(Records, SV1),
             case check_list_elments(SFmtrs) of
-                {formaters, Fmtrs} ->
-                    assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs);
+                {formaters, Fmtrs, Extras, Covers} ->
+                    SFields = atom_fields(Records, SV1),
+                    assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs, Extras, Covers);
                 false ->
                     Form
             end;
         variable ->
             case {check_list_elments(SVals), check_list_elments(SFmtrs)} of
-                {{fields, _Length, SFields}, {formaters, Fmtrs}} ->
-                    assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs);
+                {{fields, _Length, SFields}, {formaters, Fmtrs, Extras, Covers}} ->
+                    assign_variable_fields(DRec, SFields, SV1, Records, Fmtrs, Extras, Covers);
                 _ ->
                     Form
             end
     end.
 
-assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs0) ->
+assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs0, Extras, Covers) ->
     Fmtrs = formaters(Fmtrs0),
     DFields = atom_fields(Records, DRec),
+    MatchFields = fields_umerge(Extras, DFields) -- Covers,
     MatchList = [
         begin
-            case lists:member(Field, DFields) of
+            case lists:member(Field, MatchFields) of
                 true ->
                     {Field, temp_var(Field)};
                 _ ->
@@ -382,7 +402,7 @@ assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs0) ->
             false ->
                 record_field(Field, dict:fetch(Field, Dict));
             Fmtr ->
-                f_record_field(Field, dict:fetch(Field, Dict), Fmtr)
+                f_record_field(erl_syntax:atom(Field), Fmtr)
         end || Field <- DFields, lists:member(Field, SFields)],
     Record = erl_syntax:record_expr(DRec, Fields),
     erl_syntax:block_expr([Match, Record]).
@@ -436,34 +456,53 @@ record_field(Var0, Rec0, Field0) when is_atom(Field0) ->
     Access = erl_syntax:record_access(Var0, Rec0, Field),
     erl_syntax:record_field(Field, Access).
 
-f_record_field(Field0, Var, {_, Fun}) when is_atom(Field0) ->
-    Field = erl_syntax:atom(Field0),
-    Value = erl_syntax:application(Fun, [Var]),
+f_record_field(Field, {_, Fun, Args0}) ->
+    Args = [temp_var(Arg) || Arg <- Args0],
+    Value = erl_syntax:application(Fun, Args),
     erl_syntax:revert(erl_syntax:record_field(Field, Value)).
 
-f_record_field(Var0, Rec0, Field0, {_, Fun}) when is_atom(Field0) ->
-    Field = erl_syntax:atom(Field0),
-    Access = erl_syntax:record_access(Var0, Rec0, Field),
-    Value = erl_syntax:application(Fun, [Access]),
+f_record_field(Field, Dict, {_, Fun, Args0}) ->
+    Atoms = [erl_syntax:atom_value(Arg) || Arg <- Args0],
+    Args = [dict:fetch(Atom, Dict) || Atom <- Atoms],
+    Value = erl_syntax:application(Fun, Args),
+    erl_syntax:revert(erl_syntax:record_field(Field, Value)).
+
+f_record_field(Var, Rec, Field, {_, Fun, Args}) ->
+    Accesses = [erl_syntax:record_access(Var, Rec, Arg) || Arg <- Args],
+    Value = erl_syntax:application(Fun, Accesses),
     erl_syntax:revert(erl_syntax:record_field(Field, Value)).
 
 temp_var(Field) when is_atom(Field) ->
-    erl_syntax:variable("XtTrans_" ++ atom_to_list(Field)).
+    erl_syntax:variable("XtTransVar____" ++ atom_to_list(Field));
+temp_var(Field) ->
+    erl_syntax:variable("XtTransVar____" ++ atom_to_list(erl_syntax:atom_value(Field))).
 
 check_list_elments(ListExpr) ->
     Eles = erl_syntax:list_elements(ListExpr),
-    Types = [erl_syntax:type(Ele) || Ele <- Eles],
-    case lists:all(fun(Type) -> Type =:= tuple end, Types) of
-        true ->
+    Type = lists:umerge([[erl_syntax:type(Ele)] || Ele <- Eles]),
+    case Type of
+        [tuple] ->
             TuplesEles = [erl_syntax:tuple_elements(Ele) || Ele <- Eles],
-            Fmtrs = [{erl_syntax:atom_value(Field), Fmtr} || [Field, Fmtr] <- TuplesEles],
-            {formaters, Fmtrs};
+            {Fmtrs, Extras, Covers} =
+                lists:foldl(fun
+                    ([Field, Fmtr0], {FmtrsAcc, ArgsAcc, CoversAcc}) ->
+                        Fmtr = {erl_syntax:atom_value(Field), Fmtr0, [Field]},
+                        {[Fmtr | FmtrsAcc], ArgsAcc, CoversAcc};
+                    ([Field, Fmtr0, Args0], {FmtrsAcc, ArgsAcc, CoversAcc}) ->
+                        {fields, _, Extras0} = check_list_elments(Args0),
+                        FieldName = erl_syntax:atom_value(Field),
+                        Fmtr = {FieldName, Fmtr0, erl_syntax:list_elements(Args0)},
+                        Extras = fields_umerge(Extras0, ArgsAcc),
+                        Covers = fields_umerge([FieldName], CoversAcc),
+                        {[Fmtr | FmtrsAcc], Extras, Covers}
+                end, {[], [], []}, TuplesEles),
+            {formaters, Fmtrs, Extras, Covers -- Extras};
+        [atom] ->
+            Fields = [erl_syntax:atom_value(Ele) || Ele <- Eles],
+            {fields, erlang:length(Fields), Fields};
         _ ->
-            case lists:all(fun(Type) -> Type =:= atom end, Types) of
-                true ->
-                    Fields = [erl_syntax:atom_value(Ele) || Ele <- Eles],
-                    {fields, erlang:length(Fields), Fields};
-                _ ->
-                    false
-            end
+            false
     end.
+
+fields_umerge(Fields, Extra) ->
+    lists:umerge(lists:sort(Fields), lists:sort(Extra)).
