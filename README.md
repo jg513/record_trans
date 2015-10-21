@@ -1,6 +1,8 @@
 # xt_trans
 
-See samples in ```xt_trans_tests.erl```.
+Copy same fields beween two records, or assign a list of values to a record.
+
+See samples in ```test/xt_trans_tests.erl```.
 
 ### record_copy/2
 
@@ -8,4 +10,4 @@ Copy same fields between two records.
 
 ### record_assign/2
 
-Assign values to a record.
+Assign a list of values to a record
