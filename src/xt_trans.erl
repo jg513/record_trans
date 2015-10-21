@@ -205,18 +205,18 @@ copy_transform([DRec, DVar], SArgs, Form0, Records) ->
     Form = copy_transform([DRec], SArgs, Form0, Records),
     record_expr_add_arg(DVar, Form);
 copy_transform([DRec], [SRec, SVar], _Form, Records) ->
-    copy_fields(DRec, SRec, SVar, Records, []);
+    copy_fields(DRec, SRec, SVar, Records, [], []);
 copy_transform([DRec], [SRec, SV1, Fmtrs0], _Form, Records) ->
     case erl_syntax:type(SV1) of
         variable ->
-            {formaters, Fmtrs, _Extras, _Covers} = check_list_elments(Fmtrs0),
-            copy_fields(DRec, SRec, SV1, Records, Fmtrs);
+            {formaters, Fmtrs, _Extras, Covers} = check_list_elments(Fmtrs0),
+            copy_fields(DRec, SRec, SV1, Records, Fmtrs, Covers);
         record_expr ->
-            {formaters, Fmtrs, _Extras, _Covers} = check_list_elments(Fmtrs0),
-            copy_fields(DRec, SRec, SV1, Records, Fmtrs)
+            {formaters, Fmtrs, _Extras, Covers} = check_list_elments(Fmtrs0),
+            copy_fields(DRec, SRec, SV1, Records, Fmtrs, Covers)
     end.
 
-copy_fields(DRec, SRec, SVar, Records, Fmtrs0) ->
+copy_fields(DRec, SRec, SVar, Records, Fmtrs0, Covers) ->
     DFields = atom_fields(Records, DRec),
     SFields = atom_fields(Records, SRec),
     Fmtrs = formaters(Fmtrs0),
@@ -226,7 +226,7 @@ copy_fields(DRec, SRec, SVar, Records, Fmtrs0) ->
                 record_field(SVar, SRec, Field);
             Fmtr ->
                 f_record_field(SVar, SRec, erl_syntax:atom(Field), Fmtr)
-        end || Field <- DFields, lists:member(Field, SFields)],
+        end || Field <- DFields, lists:member(Field, SFields ++ Covers)],
     erl_syntax:record_expr(DRec, Fields).
 
 %% assign and transform fields
@@ -285,15 +285,15 @@ assign_list([DRec], [SV1, SV2], Form, Records) ->
     case erl_syntax:type(SV1) of
         atom ->
             SFields = atom_fields(Records, SV1),
-            assign_list_fields(DRec, SFields, SV2, Records, []);
+            assign_list_fields(DRec, SFields, SV2, Records, [], []);
         list ->
             Length = erl_syntax:list_length(SV1),
             case check_list_elments(SV2) of
                 {fields, Length, SFields} ->
-                    assign_list_fields(DRec, SFields, SV1, Records, []);
-                {formaters, Fmtrs, _Extras, _Covers} ->
+                    assign_list_fields(DRec, SFields, SV1, Records, [], []);
+                {formaters, Fmtrs, _Extras, Covers} ->
                     SFields = atom_fields(Records, DRec),
-                    assign_list_fields(DRec, SFields, SV1, Records, Fmtrs);
+                    assign_list_fields(DRec, SFields, SV1, Records, Fmtrs, Covers);
                 false ->
                     Form
             end
@@ -306,8 +306,8 @@ assign_list([DRec], [SV1, SVals, SFmtrs], Form, Records) ->
             case erl_syntax:list_length(SVals) of
                 Length ->
                     case check_list_elments(SFmtrs) of
-                        {formaters, Fmtrs, _Extras, _Covers} ->
-                            assign_list_fields(DRec, SFields, SVals, Records, Fmtrs);
+                        {formaters, Fmtrs, _Extras, Covers} ->
+                            assign_list_fields(DRec, SFields, SVals, Records, Fmtrs, Covers);
                         _ ->
                             Form
                     end;
@@ -317,14 +317,14 @@ assign_list([DRec], [SV1, SVals, SFmtrs], Form, Records) ->
         list ->
             Length = erl_syntax:list_length(SV1),
             case {check_list_elments(SVals), check_list_elments(SFmtrs)} of
-                {{fields, Length, SFields}, {formaters, Fmtrs, _Extras, _Covers}} ->
-                    assign_list_fields(DRec, SFields, SV1, Records, Fmtrs);
+                {{fields, Length, SFields}, {formaters, Fmtrs, _Extras, Covers}} ->
+                    assign_list_fields(DRec, SFields, SV1, Records, Fmtrs, Covers);
                 _ ->
                     Form
             end
     end.
 
-assign_list_fields(DRec, SFields, SVar, Records, Fmtrs0) when is_list(SFields) ->
+assign_list_fields(DRec, SFields, SVar, Records, Fmtrs0, Covers) when is_list(SFields) ->
     Fmtrs = formaters(Fmtrs0),
     DFields = atom_fields(Records, DRec),
     Dict = dict:from_list(lists:zip(SFields, erl_syntax:list_elements(SVar))),
@@ -334,7 +334,7 @@ assign_list_fields(DRec, SFields, SVar, Records, Fmtrs0) when is_list(SFields) -
                 record_field(Field, dict:fetch(Field, Dict));
             Fmtr ->
                 f_record_field(erl_syntax:atom(Field), Dict, Fmtr)
-        end || Field <- DFields, lists:member(Field, SFields)],
+        end || Field <- DFields, lists:member(Field, SFields ++ Covers)],
     erl_syntax:record_expr(DRec, Fields).
 
 pre_assign_variable([DRecExpr], SArgs, Form, Records) ->
@@ -403,7 +403,7 @@ assign_variable_fields(DRec, SFields, SVals, Records, Fmtrs0, Extras, Covers) ->
                 record_field(Field, dict:fetch(Field, Dict));
             Fmtr ->
                 f_record_field(erl_syntax:atom(Field), Fmtr)
-        end || Field <- DFields, lists:member(Field, SFields)],
+        end || Field <- DFields, lists:member(Field, SFields ++ Covers)],
     Record = erl_syntax:record_expr(DRec, Fields),
     erl_syntax:block_expr([Match, Record]).
 
