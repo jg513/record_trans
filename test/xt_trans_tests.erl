@@ -97,4 +97,14 @@ assign_variable_fmt_test_() ->
         ?_assertEqual(#dst{f1 = 1, f2 = 25}, record_assign(dst, {List3, [other, f2, any], [{f2, formater, [f2, any]}]}))
     ].
 
+get_test_() ->
+    Rec = #src{},
+    Key = f3,
+    [
+        ?_assertEqual(12, record_get(src, Key)),
+        ?_assertEqual(12, record_get({src, Rec}, Key)),
+        ?_assertEqual([11, 12], record_get(src, [f2, f3])),
+        ?_assertEqual(["11", 12], record_get({src, Rec}, {[f2, f3], [{f2, integer_to_list}]}))
+    ].
+
 -endif.
