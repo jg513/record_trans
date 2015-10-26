@@ -21,7 +21,6 @@ parse_transform(Forms0, Options0) ->
     Records = dict:from_list(records(Forms0)),
     State0 = #state{records = Records, options = Options0},
     {Forms, _State} = forms(Forms0, State0),
-    merl:print(Forms),
     Forms.
 
 %% init state records
@@ -54,7 +53,15 @@ forms([Form0 | Forms0], State0) ->
 forms([], State) ->
     {[], State}.
 
-form(Form0, #state{records = Records} = State) ->
+form(Form, #state{records = Records} = State) ->
+    try
+        transform(Records, Form, State)
+    catch
+        _Err: _Reason ->
+            Form
+    end.
+
+transform(Records, Form0, State) ->
     case Form0 of
         ?Q("record_copy(_@DArgs, _@SArgs)") ->
             Form = copy_transform(DArgs, SArgs, Form0, Records),
@@ -109,24 +116,17 @@ copy_transform(DArgs0, SArgs0, _Form, Records) ->
     ?Q("{'@SRec', _@SVar, _@Fmtrs0}") = copy_src_args(SArgs0),
     SFields = atom_fields(Records, SRec),
     {Fmtrs, _Extras, Covers} = check_formaters(Fmtrs0),
-    Fields = [record_field(SVar, SRec, Field, lists:keyfind(Field, 1, Fmtrs))
+    Fields = [copy_record_field(SVar, SRec, Field, lists:keyfind(Field, 1, Fmtrs))
         || Field <- DFields, lists:member(Field, SFields ++ Covers)],
     ?Q("_@DVar#'@DRec'{'@_@Fields' = []}").
 
-record_field(Var, Rec, Field0, {_, Fun, Args}) when is_atom(Field0) ->
+copy_record_field(Var, Rec, Field0, {_, Fun, Args}) when is_atom(Field0) ->
     Accesses = [erl_syntax:record_access(Var, Rec, Arg) || Arg <- Args],
     Value = erl_syntax:application(Fun, Accesses),
     Field = erl_syntax:atom(Field0),
     erl_syntax:record_field(Field, Value);
-record_field(Var, Rec, Field, {_, Fun, Args}) ->
-    Accesses = [erl_syntax:record_access(Var, Rec, Arg) || Arg <- Args],
-    Value = erl_syntax:application(Fun, Accesses),
-    erl_syntax:record_field(Field, Value);
-record_field(Var, Rec, Field0, _Fmtr) when is_atom(Field0) ->
+copy_record_field(Var, Rec, Field0, _Fmtr) when is_atom(Field0) ->
     Field = erl_syntax:atom(Field0),
-    Access = erl_syntax:record_access(Var, Rec, Field),
-    erl_syntax:record_field(Field, Access);
-record_field(Var, Rec, Field, _Fmtr) ->
     Access = erl_syntax:record_access(Var, Rec, Field),
     erl_syntax:record_field(Field, Access).
 
@@ -209,27 +209,42 @@ assign_variable_fields(DRec, DVar, SFields, SVals, Records, Fmtrs, Extras, Cover
     Pattern = erl_syntax:revert(erl_syntax:list([F || {_, F} <- MatchList])),
     Dict = dict:from_list(MatchList),
     Match = erl_syntax:match_expr(Pattern, SVals),
-    Fields = [
-        case lists:keyfind(Field, 1, Fmtrs) of
-            false ->
-                record_field(Field, dict:fetch(Field, Dict));
-            Fmtr ->
-                f_record_field(erl_syntax:atom(Field), Fmtr)
-        end || Field <- DFields, lists:member(Field, SFields ++ Covers)],
+    Fields = [assign_record_field(Field, dict:fetch(Field, Dict), lists:keyfind(Field, 1, Fmtrs))
+        || Field <- DFields, lists:member(Field, SFields ++ Covers)],
     Record = erl_syntax:record_expr(DVar, DRec, Fields),
     erl_syntax:block_expr([Match, Record]).
+
+assign_record_field(Field0, _Var, {_, Fun, Args0}) ->
+    Args = [temp_var(Arg) || Arg <- Args0],
+    Value = erl_syntax:application(Fun, Args),
+    Field = erl_syntax:atom(Field0),
+    erl_syntax:record_field(Field, Value);
+assign_record_field(Field0, Var, _Fmtr) when is_atom(Field0) ->
+    Field = erl_syntax:atom(Field0),
+    erl_syntax:record_field(Field, Var).
+
+temp_var(Field) when is_atom(Field) ->
+    erl_syntax:variable("XtTransVar____" ++ atom_to_list(Field));
+temp_var(Field) ->
+    erl_syntax:variable("XtTransVar____" ++ atom_to_list(erl_syntax:atom_value(Field))).
 
 assign_list_fields(DRec, DVar, SFields, SVar, Records, Fmtrs, Covers) ->
     DFields = atom_fields(Records, DRec),
     Dict = dict:from_list(lists:zip(SFields, erl_syntax:list_elements(SVar))),
-    Fields = [
-        case lists:keyfind(Field, 1, Fmtrs) of
-            false ->
-                record_field(Field, dict:fetch(Field, Dict));
-            Fmtr ->
-                f_record_field(erl_syntax:atom(Field), Dict, Fmtr)
-        end || Field <- DFields, lists:member(Field, SFields ++ Covers)],
+    Fields = [assign_list_field(Field, Dict, lists:keyfind(Field, 1, Fmtrs))
+        || Field <- DFields, lists:member(Field, SFields ++ Covers)],
     erl_syntax:record_expr(DVar, DRec, Fields).
+
+assign_list_field(Field0, Dict, {_, Fun, Args0}) ->
+    Field = erl_syntax:atom(Field0),
+    Atoms = [erl_syntax:atom_value(Arg) || Arg <- Args0],
+    Args = [dict:fetch(Atom, Dict) || Atom <- Atoms],
+    Value = erl_syntax:application(Fun, Args),
+    erl_syntax:record_field(Field, Value);
+assign_list_field(Field0, Dict, _Fmtr) when is_atom(Field0) ->
+    Var = dict:fetch(Field0, Dict),
+    Field = erl_syntax:atom(Field0),
+    erl_syntax:record_field(Field, Var).
 
 get_dst_args(DArgs) ->
     copy_dst_args(DArgs).
@@ -265,13 +280,7 @@ get_field(DVar, SRec, SVar, Records, Fmtrs, _Covers) ->
     Clauses = [
         begin
             Patterns = [erl_syntax:abstract(Field)],
-            Body =
-                case lists:keyfind(Field, 1, Fmtrs) of
-                    false ->
-                        record_access(SVar, SRec, Field);
-                    Fmtr ->
-                        f_record_access(SVar, SRec, Fmtr)
-                end,
+            Body = record_access(SVar, SRec, Field, lists:keyfind(Field, 1, Fmtrs)),
             erl_syntax:clause(Patterns, none, [Body])
         end || Field <- SFields],
     Default = ?Q("_ -> undefined"),
@@ -279,15 +288,7 @@ get_field(DVar, SRec, SVar, Records, Fmtrs, _Covers) ->
 
 get_fields(SRec, SVar, DVar, Fmtrs, _Covers) ->
     SFields = erl_syntax:concrete(DVar),
-    List = [
-        begin
-            case lists:keyfind(Field, 1, Fmtrs) of
-                false ->
-                    record_access(SVar, SRec, Field);
-                Fmtr ->
-                    f_record_access(SVar, SRec, Fmtr)
-            end
-        end || Field <- SFields],
+    List = [record_access(SVar, SRec, Field, lists:keyfind(Field, 1, Fmtrs)) || Field <- SFields],
     erl_syntax:list(List).
 
 %% Transform Internal API
@@ -296,33 +297,12 @@ atom_fields(Records, Type) when is_atom(Type) ->
 atom_fields(Records, Type) ->
     dict:fetch(erl_syntax:atom_value(Type), Records).
 
-record_access(Var, Rec, Field0) when is_atom(Field0) ->
+record_access(Var, Rec, _Field, {_, Fun, Args}) ->
+    Accesses = [erl_syntax:record_access(Var, Rec, Arg) || Arg <- Args],
+    erl_syntax:application(Fun, Accesses);
+record_access(Var, Rec, Field0, _Fmtr) when is_atom(Field0) ->
     Field = erl_syntax:atom(Field0),
     erl_syntax:record_access(Var, Rec, Field).
-
-f_record_access(Var, Rec, {_, Fun, Args}) ->
-    Accesses = [erl_syntax:record_access(Var, Rec, Arg) || Arg <- Args],
-    erl_syntax:application(Fun, Accesses).
-
-record_field(Field0, Var) when is_atom(Field0) ->
-    Field = erl_syntax:atom(Field0),
-    erl_syntax:record_field(Field, Var).
-
-f_record_field(Field, {_, Fun, Args0}) ->
-    Args = [temp_var(Arg) || Arg <- Args0],
-    Value = erl_syntax:application(Fun, Args),
-    erl_syntax:revert(erl_syntax:record_field(Field, Value)).
-
-f_record_field(Field, Dict, {_, Fun, Args0}) ->
-    Atoms = [erl_syntax:atom_value(Arg) || Arg <- Args0],
-    Args = [dict:fetch(Atom, Dict) || Atom <- Atoms],
-    Value = erl_syntax:application(Fun, Args),
-    erl_syntax:revert(erl_syntax:record_field(Field, Value)).
-
-temp_var(Field) when is_atom(Field) ->
-    erl_syntax:variable("XtTransVar____" ++ atom_to_list(Field));
-temp_var(Field) ->
-    erl_syntax:variable("XtTransVar____" ++ atom_to_list(erl_syntax:atom_value(Field))).
 
 check_formaters(Fmtrs0) ->
     {Fmtrs, Extras, Covers} =
