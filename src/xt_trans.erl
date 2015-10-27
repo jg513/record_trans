@@ -12,25 +12,31 @@
 -export([parse_transform/2]).
 
 -record(state, {
+    file = "",
     records = dict:new(),
     options = []
 }).
 
 %% External API
 parse_transform(Forms0, Options0) ->
-    Records = dict:from_list(records(Forms0)),
-    State0 = #state{records = Records, options = Options0},
+    State0 = init_state(Forms0, Options0),
     {Forms, _State} = forms(Forms0, State0),
     Forms.
 
-%% init state records
-records(Forms) ->
-    case proplists:get_value(records, erl_syntax_lib:analyze_forms(Forms)) of
-        undefined ->
-            [];
-        Records ->
-            [{Type, [erlang:element(1, Field) || Field <- Fields]} || {Type, Fields} <- Records]
-    end.
+init_state(Forms, Options) ->
+    lists:foldl(fun(Form, Acc) ->
+        case Form of
+            ?Q("-file(\"'@File\", 9090).") ->
+                Acc#state{file = filename:absname(erl_syntax:string_value(File))};
+            ?Q("-record('@Type0', {'@_@Fields0' = []}).") ->
+                Type = erl_syntax:atom_value(Type0),
+                Fields = [erl_syntax:atom_value(erl_syntax:record_field_name(Field))
+                    || Field <- Fields0],
+                Acc#state{records = dict:store(Type, Fields, Acc#state.records)};
+            _ ->
+                Acc
+        end
+    end, #state{options = Options}, Forms).
 
 %% traverse forms
 forms([Head | Tail], State0) when is_list(Head) ->
@@ -53,12 +59,13 @@ forms([Form0 | Forms0], State0) ->
 forms([], State) ->
     {[], State}.
 
-form(Form, #state{records = Records} = State) ->
+form(Form, #state{records = Records, file = File} = State) ->
     try
         transform(Records, Form, State)
     catch
-        _Err: _Reason ->
-            Form
+        Err: Reason ->
+            io:format("~s:~w ~1000p: ~1000p~n", [File, erl_syntax:get_pos(Form), Err, Reason]),
+            exit(parse_error)
     end.
 
 transform(Records, Form0, State) ->
