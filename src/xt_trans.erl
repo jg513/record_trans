@@ -51,7 +51,9 @@ forms([Form0 | Forms0], State0) ->
                 {Form1, State1};
             List ->
                 {Forms1, State2} = forms(List, State1),
-                Tree = erl_syntax:make_tree(erl_syntax:type(Form1), Forms1),
+                Pos = erl_syntax:get_pos(Form1),
+                Tree0 = erl_syntax:make_tree(erl_syntax:type(Form1), Forms1),
+                Tree = erl_syntax:set_pos(Tree0, Pos),
                 {erl_syntax:revert(Tree), State2}
         end,
     {Forms, State} = forms(Forms0, State3),
@@ -69,16 +71,17 @@ form(Form, #state{records = Records, file = File} = State) ->
     end.
 
 transform(Records, Form0, State) ->
+    Pos = erl_syntax:get_pos(Form0),
     case Form0 of
         ?Q("record_copy(_@DArgs, _@SArgs)") ->
             Form = copy_transform(DArgs, SArgs, Form0, Records),
-            {Form, State};
+            {erl_syntax:set_pos(Form, Pos), State};
         ?Q("record_assign(_@DArgs, _@SArgs)") ->
             Form = assign_transform(DArgs, SArgs, Form0, Records),
-            {Form, State};
+            {erl_syntax:set_pos(Form, Pos), State};
         ?Q("record_get(_@DArgs, _@SArgs)") ->
             Form = get_transform(DArgs, SArgs, Form0, Records),
-            {Form, State};
+            {erl_syntax:set_pos(Form, Pos), State};
         _ ->
             {Form0, State}
     end.
