@@ -85,16 +85,18 @@ transform(Records, Form0, State) ->
 
 copy_dst_args(DArgs) ->
     case DArgs of
+        ?Q("{'@DRec', #'@DRec'{}}") ->
+            ?Q("{'@DRec'}");
         ?Q("{'@DRec', _@DVar}") ->
             ?Q("{'@DRec', _@DVar}");
         ?Q("{#'@DRec'{}}") ->
-            ?Q("{'@DRec', #'@DRec'{}}");
+            ?Q("{'@DRec'}");
         ?Q("{'@DRec'}") ->
-            ?Q("{'@DRec', #'@DRec'{}}");
+            ?Q("{'@DRec'}");
         ?Q("#'@DRec'{}") ->
-            ?Q("{'@DRec', #'@DRec'{}}");
+            ?Q("{'@DRec'}");
         ?Q("'@DRec'") ->
-            ?Q("{'@DRec', #'@DRec'{}}")
+            ?Q("{'@DRec'}")
     end.
 
 copy_src_args(SArgs) ->
@@ -118,14 +120,25 @@ copy_src_args(SArgs) ->
     end.
 
 copy_transform(DArgs0, SArgs0, _Form, Records) ->
-    ?Q("{'@DRec', _@DVar}") = copy_dst_args(DArgs0),
+    {DRec, DVar} =
+        case copy_dst_args(DArgs0) of
+            ?Q("{'@DRec0', _@DVar0}") ->
+                {DRec0, DVar0};
+            ?Q("{'@DRec0'}") ->
+                {DRec0, undefined}
+        end,
     DFields = atom_fields(Records, DRec),
     ?Q("{'@SRec', _@SVar, _@Fmtrs0}") = copy_src_args(SArgs0),
     SFields = atom_fields(Records, SRec),
     {Fmtrs, _Extras, Covers} = check_formaters(Fmtrs0),
     Fields = [copy_record_field(SVar, SRec, Field, lists:keyfind(Field, 1, Fmtrs))
         || Field <- DFields, lists:member(Field, SFields ++ Covers)],
-    ?Q("_@DVar#'@DRec'{'@_@Fields' = []}").
+    case DVar of
+        undefined ->
+            ?Q("#'@DRec'{'@_@Fields' = []}");
+        _ ->
+            ?Q("_@DVar#'@DRec'{'@_@Fields' = []}")
+    end.
 
 copy_record_field(Var, Rec, Field0, {_, Fun, Args}) when is_atom(Field0) ->
     Accesses = [erl_syntax:record_access(Var, Rec, Arg) || Arg <- Args],
@@ -189,7 +202,13 @@ assign_src_args(SArgs, Records, DFields) ->
     end.
 
 assign_transform(DArgs0, SArgs0, _Form, Records) ->
-    ?Q("{'@DRec', _@DVar}") = assign_dst_args(DArgs0),
+    {DRec, DVar} =
+        case assign_dst_args(DArgs0) of
+            ?Q("{'@DRec0', _@DVar0}") ->
+                {DRec0, DVar0};
+            ?Q("{'@DRec0'}") ->
+                {DRec0, undefined}
+        end,
     DFields = atom_fields(Records, DRec),
     ?Q("{_@SVar, _@SFields0, _@Fmtrs0}") = assign_src_args(SArgs0, Records, DFields),
     SFields = erl_syntax:concrete(SFields0),
@@ -218,7 +237,13 @@ assign_variable_fields(DRec, DVar, SFields, SVals, Records, Fmtrs, Extras, Cover
     Match = erl_syntax:match_expr(Pattern, SVals),
     Fields = [assign_record_field(Field, dict:fetch(Field, Dict), lists:keyfind(Field, 1, Fmtrs))
         || Field <- DFields, lists:member(Field, SFields ++ Covers)],
-    Record = erl_syntax:record_expr(DVar, DRec, Fields),
+    Record =
+        case DVar of
+            undefined ->
+                erl_syntax:record_expr(DRec, Fields);
+            _ ->
+                erl_syntax:record_expr(DVar, DRec, Fields)
+        end,
     erl_syntax:block_expr([Match, Record]).
 
 assign_record_field(Field0, _Var, {_, Fun, Args0}) ->
@@ -240,7 +265,12 @@ assign_list_fields(DRec, DVar, SFields, SVar, Records, Fmtrs, Covers) ->
     Dict = dict:from_list(lists:zip(SFields, erl_syntax:list_elements(SVar))),
     Fields = [assign_list_field(Field, Dict, lists:keyfind(Field, 1, Fmtrs))
         || Field <- DFields, lists:member(Field, SFields ++ Covers)],
-    erl_syntax:record_expr(DVar, DRec, Fields).
+    case DVar of
+        undefined ->
+            erl_syntax:record_expr(DRec, Fields);
+        _ ->
+            erl_syntax:record_expr(DVar, DRec, Fields)
+    end.
 
 assign_list_field(Field0, Dict, {_, Fun, Args0}) ->
     Field = erl_syntax:atom(Field0),
@@ -271,7 +301,14 @@ get_src_args(SArgs, _Records, _DFields) ->
     end.
 
 get_transform(DArgs0, SArgs0, _Form, Records) ->
-    ?Q("{'@DRec', _@DVar}") = get_dst_args(DArgs0),
+    {DRec, DVar} =
+        case get_dst_args(DArgs0) of
+            ?Q("{'@DRec0', _@DVar0}") ->
+                {DRec0, DVar0};
+            ?Q("{'@DRec0'}") ->
+                ?Q("{'@DRec', _@DVar}") = ?Q("{'@DRec0', #'@DRec0'{}}"),
+                {DRec, DVar}
+        end,
     DFields = atom_fields(Records, DRec),
     ?Q("{_@SVar, _@Fmtrs0}") = get_src_args(SArgs0, Records, DFields),
     {Fmtrs, _Extras, Covers} = check_formaters(Fmtrs0),
