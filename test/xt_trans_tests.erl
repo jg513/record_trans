@@ -1,5 +1,5 @@
 
-%% Copyright (c) JinGan <jg_513@163.com>
+%% Copyright (c) JinGan <jg_513@163.com> <https://github.com/jg513>
 
 -module(xt_trans_tests).
 

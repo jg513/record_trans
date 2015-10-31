@@ -1,5 +1,5 @@
 
-%% Copyright (c) JinGan <jg_513@163.com>
+%% Copyright (c) JinGan <jg_513@163.com> <https://github.com/jg513>
 
 -module(xt_trans).
 
@@ -44,20 +44,25 @@ forms([Head | Tail], State0) when is_list(Head) ->
     {Forms1, State} = forms(Tail, State1),
     {[Forms0 | Forms1], State};
 forms([Form0 | Forms0], State0) ->
-    {Form1, State1} = form(Form0, State0),
-    {Form, State3} =
-        case erl_syntax:subtrees(Form1) of
-            [] ->
-                {Form1, State1};
-            List ->
-                {Forms1, State2} = forms(List, State1),
-                Pos = erl_syntax:get_pos(Form1),
-                Tree0 = erl_syntax:make_tree(erl_syntax:type(Form1), Forms1),
-                Tree = erl_syntax:set_pos(Tree0, Pos),
-                {erl_syntax:revert(Tree), State2}
-        end,
-    {Forms, State} = forms(Forms0, State3),
-    {[Form | Forms], State};
+    case form(Form0, State0) of
+        {undefined, State1} ->
+            {Forms0, State1};
+        {Form1, State1} ->
+            Pos = erl_syntax:get_pos(Form0),
+            {Form, State3} =
+                case erl_syntax:subtrees(Form1) of
+                    [] ->
+                        Tree = erl_syntax:set_pos(Form1, Pos),
+                        {erl_syntax:revert(Tree), State1};
+                    List ->
+                        {Forms1, State2} = forms(List, State1),
+                        Tree0 = erl_syntax:make_tree(erl_syntax:type(Form1), Forms1),
+                        Tree = erl_syntax:set_pos(Tree0, Pos),
+                        {erl_syntax:revert(Tree), State2}
+                end,
+            {Forms, State} = forms(Forms0, State3),
+            {[Form | Forms], State}
+    end;
 forms([], State) ->
     {[], State}.
 
@@ -71,17 +76,16 @@ form(Form, #state{records = Records, file = File} = State) ->
     end.
 
 transform(Records, Form0, State) ->
-    Pos = erl_syntax:get_pos(Form0),
     case Form0 of
         ?Q("record_copy(_@DArgs, _@SArgs)") ->
             Form = copy_transform(DArgs, SArgs, Form0, Records),
-            {erl_syntax:set_pos(Form, Pos), State};
+            {Form, State};
         ?Q("record_assign(_@DArgs, _@SArgs)") ->
             Form = assign_transform(DArgs, SArgs, Form0, Records),
-            {erl_syntax:set_pos(Form, Pos), State};
+            {Form, State};
         ?Q("record_get(_@DArgs, _@SArgs)") ->
             Form = get_transform(DArgs, SArgs, Form0, Records),
-            {erl_syntax:set_pos(Form, Pos), State};
+            {Form, State};
         _ ->
             {Form0, State}
     end.
