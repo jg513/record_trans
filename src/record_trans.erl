@@ -1,7 +1,7 @@
 
-%% Copyright (c) JinGan <jg_513@163.com> <https://github.com/jg513>
+%% Copyright (c) jg_513@163.com, https://github.com/jg513
 
--module(xt_trans).
+-module(record_trans).
 
 -ifdef(MERL_DEP).
 -include_lib("merl/include/merl.hrl").

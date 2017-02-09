@@ -1,11 +1,11 @@
 
-%% Copyright (c) JinGan <jg_513@163.com> <https://github.com/jg513>
+%% Copyright (c) jg_513@163.com, https://github.com/jg513
 
--module(xt_trans_tests).
+-module(record_trans_tests).
 
 -compile(export_all).
 
--compile([{parse_transform, xt_trans}]).
+-compile([{parse_transform, record_trans}]).
 
 -record(dst, {
     f1 = 1,
